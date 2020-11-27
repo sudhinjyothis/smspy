@@ -29,6 +29,11 @@ def studentrec(event):
     entry_fees.insert(END, sd[6])
 
 
+def comboclick(event):
+    global search_option_click
+    search_option_click = combobox.get()
+
+
 def logout():
     exit_mainpage = messagebox.askquestion("Logout", "Do you want to logout")
     if exit_mainpage == "yes":
@@ -167,7 +172,7 @@ def deleterec(admno):
     mydb_functions.close()
 
 
-def searchdatadb(admno):
+def searchdatadb(admno, name, standard):
     mydb_functions = mysql.connector.connect(
         host="localhost",
         user="root",
@@ -175,11 +180,25 @@ def searchdatadb(admno):
         database="schoolmanagement"
     )
     cursorobj = mydb_functions.cursor()
-    qry = "SELECT * from studentdata where admno={}".format(
-        admno)
-    cursorobj.execute(qry)
-    rows = cursorobj.fetchall()
-    return rows
+    if search_option_click == "admno":
+        qry = "SELECT * from studentdata where admno={}".format(
+            admno)
+        cursorobj.execute(qry)
+        rows = cursorobj.fetchall()
+        return rows
+    elif search_option_click == "name":
+        qry = "SELECT * from studentdata where studentname like '{}%' ".format(
+            name)
+        cursorobj.execute(qry)
+        rows = cursorobj.fetchall()
+        return rows
+    elif search_option_click == "class":
+        qry = "SELECT * from studentdata where class like '{}%'".format(
+            standard)
+        cursorobj.execute(qry)
+        rows = cursorobj.fetchall()
+        return rows
+
     mydb_functions.close()
 
 
@@ -233,17 +252,18 @@ def deletedata():
 
 
 def searchdata():
-    if(len(entry_Student_ID.get()) == 0):
-        messagebox.showinfo("Alert", "Enter a valid admission number")
-    else:
+    try:
         for record in student_list.get_children():
             student_list.delete(record)
         flag = 0
-        for row in searchdatadb(entry_Student_ID.get()):
-            student_list.insert(parent='', index='end', text='', values=row)
+        for row in searchdatadb(search_entry.get(), search_entry.get(), search_entry.get()):
+            student_list.insert(parent='', index='end',
+                                text='', values=row)
             flag = flag+1
         if flag == 0:
-            messagebox.showinfo("Alert", "Student not found")
+            messagebox.showinfo("Alert", "not found")
+    except:
+        messagebox.showinfo("Alert", "enter a value")
 
 
 def updatedata():
@@ -442,8 +462,9 @@ def mainpage():
     global add_button, display_button, clear_button, delete_button, search_button, update_button, exit_button
     global root_main_page
     global student_list
-    global entry_Student_ID, entry_firstname, entry_surname, entry_address, entry_gender, entry_mobile, entry_fees
+    global entry_Student_ID, entry_firstname, entry_surname, entry_address, entry_gender, entry_mobile, entry_fees, search_entry
     global logout_button
+    global combobox
 
     root_main_page = Tk()
     root_main_page.geometry("1280x720+300+100")
@@ -475,9 +496,9 @@ def mainpage():
     left_frame_font = ("Helvetica", 15)
     Label(frame_left, text="AdmNo.         :",
           font=left_frame_font, bg="#FFFFFF", fg="#2c3036").place(x=40, y=40)
-    Label(frame_left, text="Firstname      :",
+    Label(frame_left, text="Name            :",
           font=left_frame_font, bg="#FFFFFF", fg="#2c3036").place(x=40, y=100)
-    Label(frame_left, text="Surname       :",
+    Label(frame_left, text="Class            :",
           font=left_frame_font, bg="#FFFFFF", fg="#2c3036").place(x=40, y=160)
     Label(frame_left, text="Address        :",
           font=left_frame_font, bg="#FFFFFF", fg="#2c3036").place(x=40, y=220)
@@ -532,10 +553,26 @@ def mainpage():
     frame_right.place(x=619, y=113)
     # content
     right_title_img = ImageTk.PhotoImage(
-        Image.open("assets\\student-detail.png"))
+        Image.open("assets\\student-detail_1.png"))
     right_label_title = Label(frame_right,
                               image=right_title_img, bg="#FFFFFF")
-    right_label_title.place(x=150, y=0)
+    right_label_title.place(x=130, y=0)
+
+    options = ["", "admno", "class", "name"]
+    combobox = ttk.Combobox(frame_right, value=options)
+    combobox.current(0)
+    combobox.bind("<<ComboboxSelected>>", comboclick)
+    combobox.place(x=473, y=50)
+    combobox_text = Label(
+        frame_right, text="Search ", font=right_frame_font, bg="#FFFFFF", fg="black")
+    combobox_text.place(x=160, y=50)
+    combobox_text_opt = Label(
+        frame_right, text="Options : ", font=right_frame_font, bg="#FFFFFF", fg="black")
+    combobox_text_opt.place(x=400, y=50)
+    search_entry = Entry(frame_right, width=21,
+                         border=0, font=right_frame_font)
+    search_entry.place(x=210, y=53)
+    Frame(frame_right, width=150, height=2, bg="#64FEB5",).place(x=210, y=70)
 
     # table
     list_box_font = ("Helvetica", 20)
@@ -545,25 +582,25 @@ def mainpage():
     scroll_y = Scrollbar(frame_list, orient=VERTICAL)
     student_list = ttk.Treeview(frame_list)
     student_list['columns'] = (
-        "admno", "firstname", "surname", "address", "gender", "mobile no.", "fees")
+        "admno", "firstname", "class", "address", "gender", "mobile no.", "fees")
     # column
     student_list.column("#0", width=0, stretch=NO)
     student_list.column("admno", width=45, anchor=CENTER)
-    student_list.column("firstname", width=80, anchor=CENTER)
-    student_list.column("surname", width=80, anchor=CENTER)
+    student_list.column("firstname", width=120, anchor=CENTER)
+    student_list.column("class", width=40, anchor=W)
     student_list.column("address", width=200, anchor=CENTER)
-    student_list.column("gender", width=50, anchor=CENTER)
-    student_list.column("mobile no.", width=70, anchor=CENTER)
+    student_list.column("gender", width=50, anchor=W)
+    student_list.column("mobile no.", width=70, anchor=W)
     student_list.column("fees", width=85, anchor=CENTER)
     # heading
     student_list.heading("#0", text="")
     student_list.heading("admno", text="admno")
-    student_list.heading("firstname", text="firstname")
-    student_list.heading("surname", text="surname")
+    student_list.heading("firstname", text="Name")
+    student_list.heading("class", text="class", anchor=W)
     student_list.heading("address", text="address")
-    student_list.heading("gender", text="gender")
-    student_list.heading("mobile no.", text="mobile no.")
-    student_list.heading("fees", text="fees remaining")
+    student_list.heading("gender", text="gender", anchor=W)
+    student_list.heading("mobile no.", text="mobile no.", anchor=W)
+    student_list.heading("fees", text="fees remaining", anchor=W)
 
     style = ttk.Style()
 
@@ -816,4 +853,4 @@ cursorobject.execute(
 cursorobject.execute(
     "CREATE table if not exists studentdata(admno int(10),firstname varchar(100),surname varchar(100),addresss varchar(200),gender varchar(10),mobile varchar(20),fees varchar(5000))")
 database.close()
-login_page()
+mainpage()
