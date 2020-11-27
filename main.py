@@ -11,8 +11,8 @@ from tkinter import ttk
 
 def studentrec(event):
     global sd
-    searchstd = student_list.curselection()[0]
-    sd = student_list.get(searchstd)
+    searchstd = student_list.focus()
+    sd = student_list.item(searchstd, 'values')
     entry_Student_ID.delete(0, END)
     entry_Student_ID.insert(END, sd[0])
     entry_firstname.delete(0, END)
@@ -55,6 +55,8 @@ def register():
     )
 
     cursor = mydb.cursor()
+    cursor.execute(
+        "CREATE table if not exists login(username varchar(100),password varchar(100))")
     username = register_entry_username.get()
     password = register_entry_password.get()
     cursor.execute("SELECT * from login")
@@ -110,6 +112,7 @@ def login():
             messagebox.showinfo("Alert", "login successful")
             flag = flag+1
             pass
+            login_root.destroy()
             mainpage()
         elif username == check[0] and password != check[1]:
             flag = flag+1
@@ -129,7 +132,7 @@ def addstudent(admno, firstname, surname, addresss, gender, mobile, fees):
         database="schoolmanagement"
     )
     cursorobj = mydb_functions.cursor()
-    qry = "INSERT into studentdata values('{}','{}','{}','{}','{}','{}','{}')".format(
+    qry = "INSERT into studentdata values({},'{}','{}','{}','{}','{}','{}')".format(
         admno, firstname, surname, addresss, gender, mobile, fees)
     cursorobj.execute(qry)
     mydb_functions.commit()
@@ -144,7 +147,7 @@ def viewdata():
         database="schoolmanagement"
     )
     cursorobj = mydb_functions.cursor()
-    cursorobj.execute("SELECT * from studentdata")
+    cursorobj.execute("SELECT * from studentdata order by admno")
     rows = cursorobj.fetchall()
     return rows
     mydb_functions.close()
@@ -158,7 +161,7 @@ def deleterec(admno):
         database="schoolmanagement"
     )
     cursorobj = mydb_functions.cursor()
-    qry = "DELETE from studentdata where admno='{}'".format(admno)
+    qry = "DELETE from studentdata where admno={}".format(admno)
     cursorobj.execute(qry)
     mydb_functions.commit()
     mydb_functions.close()
@@ -172,27 +175,13 @@ def searchdatadb(admno):
         database="schoolmanagement"
     )
     cursorobj = mydb_functions.cursor()
-    qry = "SELECT * from studentdata where admno='{}'".format(
+    qry = "SELECT * from studentdata where admno={}".format(
         admno)
     cursorobj.execute(qry)
     rows = cursorobj.fetchall()
     return rows
     mydb_functions.close()
 
-
-'''def updatedatadb(admno="", firstname="", surname="", addresss="", gender="", mobile="", fees=""):
-    mydb_functions = mysql.connector.connect(
-        host="localhost",
-        user="root",
-        passwd=os.environ.get("sql_pass"),
-        database="schoolmanagement"
-    )
-    cursorobj = mydb_functions.cursor()
-    qry = "UPDATE studentdata set admno='{}',firstname='{}',surname='{}',addresss='{}',gender='{}',mobile='{}',fees='{}'".format(
-        admno, firstname, surname, addresss, gender, mobile, fees)
-    cursorobj.execute(qry)
-    mydb_functions.commit()
-    mydb_functions.close()'''
 
 # mainpage
 
@@ -205,24 +194,32 @@ def clear():
     entry_gender.delete(0, END)
     entry_mobile.delete(0, END)
     entry_fees.delete(0, END)
+    for record in student_list.get_children():
+        student_list.delete(record)
 
 
 def adddata():
     if(len(entry_Student_ID.get()) != 0):
         addstudent(entry_Student_ID.get(), entry_firstname.get(), entry_surname.get(
         ), entry_address.get(), entry_gender.get(), entry_mobile.get(), entry_fees.get())
-        student_list.delete(0, END)
-        student_list.insert(END, (entry_Student_ID.get(), entry_firstname.get(), entry_surname.get(
-        ), entry_address.get(), entry_gender.get(), entry_mobile.get(), entry_fees.get()))
+        entry_Student_ID.delete(0, END)
+        entry_firstname.delete(0, END)
+        entry_surname.delete(0, END)
+        entry_address.delete(0, END)
+        entry_gender.delete(0, END)
+        entry_mobile.delete(0, END)
+        entry_fees.delete(0, END)
+        displaydata()
         messagebox.showinfo("Success", "student added successfully")
     else:
         messagebox.showinfo("Alert", "enter a valid admission number")
 
 
 def displaydata():
-    student_list.delete(0, END)
+    for record in student_list.get_children():
+        student_list.delete(record)
     for row in viewdata():
-        student_list.insert(END, row, str(""))
+        student_list.insert(parent='', index='end', text='', values=row)
 
 
 def deletedata():
@@ -236,13 +233,17 @@ def deletedata():
 
 
 def searchdata():
-    student_list.delete(0, END)
-    flag = 0
-    for row in searchdatadb(entry_Student_ID.get()):
-        student_list.insert(END, row, str(""))
-        flag = flag+1
-    if flag == 0:
-        messagebox.showinfo("Alert", "Student not found")
+    if(len(entry_Student_ID.get()) == 0):
+        messagebox.showinfo("Alert", "Enter a valid admission number")
+    else:
+        for record in student_list.get_children():
+            student_list.delete(record)
+        flag = 0
+        for row in searchdatadb(entry_Student_ID.get()):
+            student_list.insert(parent='', index='end', text='', values=row)
+            flag = flag+1
+        if flag == 0:
+            messagebox.showinfo("Alert", "Student not found")
 
 
 def updatedata():
@@ -253,8 +254,14 @@ def updatedata():
     if(len(entry_Student_ID.get()) != 0):
         addstudent(entry_Student_ID.get(), entry_firstname.get(), entry_surname.get(
         ), entry_address.get(), entry_gender.get(), entry_mobile.get(), entry_fees.get())
-        student_list.insert(END, (entry_Student_ID.get(), entry_firstname.get(), entry_surname.get(
-        ), entry_address.get(), entry_gender.get(), entry_mobile.get(), entry_fees.get()))
+        entry_Student_ID.delete(0, END)
+        entry_firstname.delete(0, END)
+        entry_surname.delete(0, END)
+        entry_address.delete(0, END)
+        entry_gender.delete(0, END)
+        entry_mobile.delete(0, END)
+        entry_fees.delete(0, END)
+        displaydata()
         messagebox.showinfo("Updated", "Student Details Updated Successfully")
 
 
@@ -437,7 +444,7 @@ def mainpage():
     global student_list
     global entry_Student_ID, entry_firstname, entry_surname, entry_address, entry_gender, entry_mobile, entry_fees
     global logout_button
-    login_root.destroy()
+
     root_main_page = Tk()
     root_main_page.geometry("1280x720+300+100")
     root_main_page.title("School Admin Page")
@@ -448,7 +455,7 @@ def mainpage():
     label_background = Label(image=background_img)
     label_background.place(x=0, y=0)
     # top frame
-    title_img = ImageTk.PhotoImage(Image.open("assets\\title.png"))
+    title_img = ImageTk.PhotoImage(Image.open("assets\\title_1.png"))
     label_title = Label(image=title_img, width=1257, bg="#FFFFFF")
     label_title.place(x=10, y=5)
 
@@ -456,7 +463,7 @@ def mainpage():
     logout_button_img = PhotoImage(file="assets/logout.png")
     logout_button = Button(root_main_page, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
                            image=logout_button_img, command=logout)
-    logout_button.place(x=1150, y=6)
+    logout_button.place(x=1150, y=10)
 
     # main frame
 
@@ -530,21 +537,53 @@ def mainpage():
                               image=right_title_img, bg="#FFFFFF")
     right_label_title.place(x=150, y=0)
 
-    # scrollbar
+    # table
     list_box_font = ("Helvetica", 20)
-    frame_list = Frame(frame_right, bg="#FFFFFF")
-    frame_list.place(x=10, y=80)
-    scrollbar = Scrollbar(frame_list, orient=VERTICAL)
-    scrollbar.pack(side=RIGHT, fill=Y)
-    scrollbar_horizontal = Scrollbar(frame_list, orient=HORIZONTAL)
-    scrollbar_horizontal.pack(side=BOTTOM, fill=X)
-    student_list = Listbox(frame_list, width=41, height=12,
-                           font=list_box_font, yscrollcommand=scrollbar.set, xscrollcommand=scrollbar_horizontal.set, bg="#489c80", fg="white", border=0)
-    student_list.bind("<<ListboxSelect>>", studentrec)
-    student_list.pack()
-    scrollbar.config(command=student_list.yview)
+    frame_list = Frame(frame_right, width=640, height=415, bg="black")
+    frame_list.place(x=6, y=80)
+    scroll_x = Scrollbar(frame_list, orient=HORIZONTAL)
+    scroll_y = Scrollbar(frame_list, orient=VERTICAL)
+    student_list = ttk.Treeview(frame_list)
+    student_list['columns'] = (
+        "admno", "firstname", "surname", "address", "gender", "mobile no.", "fees")
+    # column
+    student_list.column("#0", width=0, stretch=NO)
+    student_list.column("admno", width=45, anchor=CENTER)
+    student_list.column("firstname", width=80, anchor=CENTER)
+    student_list.column("surname", width=80, anchor=CENTER)
+    student_list.column("address", width=200, anchor=CENTER)
+    student_list.column("gender", width=50, anchor=CENTER)
+    student_list.column("mobile no.", width=70, anchor=CENTER)
+    student_list.column("fees", width=85, anchor=CENTER)
+    # heading
+    student_list.heading("#0", text="")
+    student_list.heading("admno", text="admno")
+    student_list.heading("firstname", text="firstname")
+    student_list.heading("surname", text="surname")
+    student_list.heading("address", text="address")
+    student_list.heading("gender", text="gender")
+    student_list.heading("mobile no.", text="mobile no.")
+    student_list.heading("fees", text="fees remaining")
 
-    scrollbar_horizontal.config(command=student_list.xview)
+    style = ttk.Style()
+
+    style.configure("Treeview",
+                    background="#c8ded8",
+                    foreground="black",
+                    rowheight=35,
+                    fieldbackground="#c8ded8"
+                    )
+    style.map("Treeview",
+              background=[('selected', '#0DEFBB')],
+              foreground=[('selected', 'black')]
+              )
+
+    scroll_x.pack(side=BOTTOM, fill=X)
+    scroll_y.pack(side=RIGHT, fill=Y)
+    scroll_x.config(command=student_list.xview)
+    scroll_y.config(command=student_list.yview)
+    student_list.pack()
+    student_list.bind("<ButtonRelease-1>", studentrec)
 
     # footer buttons frame
     frame_buttons = Frame(root_main_page, width=1260, height=95, bg="white")
@@ -764,4 +803,17 @@ def register_page():
     register_root.mainloop()
 
 
+database = mysql.connector.connect(
+    host="localhost",
+    user="root",
+    passwd=os.environ.get("sql_pass"),
+    database="schoolmanagement"
+)
+
+cursorobject = database.cursor()
+cursorobject.execute(
+    "CREATE table if not exists login(username varchar(100),password varchar(100))")
+cursorobject.execute(
+    "CREATE table if not exists studentdata(admno int(10),firstname varchar(100),surname varchar(100),addresss varchar(200),gender varchar(10),mobile varchar(20),fees varchar(5000))")
+database.close()
 login_page()
