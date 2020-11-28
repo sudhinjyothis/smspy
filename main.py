@@ -253,17 +253,20 @@ def deletedata():
 
 def searchdata():
     try:
-        for record in student_list.get_children():
-            student_list.delete(record)
-        flag = 0
-        for row in searchdatadb(search_entry.get(), search_entry.get(), search_entry.get()):
-            student_list.insert(parent='', index='end',
-                                text='', values=row)
-            flag = flag+1
-        if flag == 0:
-            messagebox.showinfo("Alert", "not found")
+        if len(str(search_entry.get())) == 0:
+            messagebox.showinfo("Alert", "Enter a value to search")
+        else:
+            for record in student_list.get_children():
+                student_list.delete(record)
+            flag = 0
+            for row in searchdatadb(search_entry.get(), search_entry.get(), search_entry.get()):
+                student_list.insert(parent='', index='end',
+                                    text='', values=row)
+                flag = flag+1
+            if flag == 0:
+                messagebox.showinfo("Alert", "not found")
     except:
-        messagebox.showinfo("Alert", "enter a value")
+        messagebox.showinfo("Alert", "enter the correct value")
 
 
 def updatedata():
@@ -562,22 +565,22 @@ def mainpage():
     combobox = ttk.Combobox(frame_right, value=options)
     combobox.current(0)
     combobox.bind("<<ComboboxSelected>>", comboclick)
-    combobox.place(x=473, y=50)
+    combobox.place(x=473, y=57)
     combobox_text = Label(
         frame_right, text="Search ", font=right_frame_font, bg="#FFFFFF", fg="black")
-    combobox_text.place(x=160, y=50)
+    combobox_text.place(x=160, y=57)
     combobox_text_opt = Label(
         frame_right, text="Options : ", font=right_frame_font, bg="#FFFFFF", fg="black")
-    combobox_text_opt.place(x=400, y=50)
+    combobox_text_opt.place(x=400, y=57)
     search_entry = Entry(frame_right, width=21,
                          border=0, font=right_frame_font)
-    search_entry.place(x=210, y=53)
-    Frame(frame_right, width=150, height=2, bg="#64FEB5",).place(x=210, y=70)
+    search_entry.place(x=210, y=60)
+    Frame(frame_right, width=150, height=2, bg="#64FEB5",).place(x=210, y=77)
 
     # table
     list_box_font = ("Helvetica", 20)
     frame_list = Frame(frame_right, width=640, height=415, bg="black")
-    frame_list.place(x=6, y=80)
+    frame_list.place(x=6, y=97)
     scroll_x = Scrollbar(frame_list, orient=HORIZONTAL)
     scroll_y = Scrollbar(frame_list, orient=VERTICAL)
     student_list = ttk.Treeview(frame_list)
@@ -615,7 +618,7 @@ def mainpage():
               foreground=[('selected', 'black')]
               )
 
-    scroll_x.pack(side=BOTTOM, fill=X)
+    #scroll_x.pack(side=BOTTOM, fill=X)
     scroll_y.pack(side=RIGHT, fill=Y)
     scroll_x.config(command=student_list.xview)
     scroll_y.config(command=student_list.yview)
