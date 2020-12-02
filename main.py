@@ -856,4 +856,4 @@ cursorobject.execute(
 cursorobject.execute(
     "CREATE table if not exists studentdata(admno int(10),firstname varchar(100),surname varchar(100),addresss varchar(200),gender varchar(10),mobile varchar(20),fees varchar(5000))")
 database.close()
-mainpage()
+login_page()
