@@ -4,7 +4,11 @@ from PIL import ImageTk, Image
 import mysql.connector
 import os
 from tkinter import ttk
-
+import base64
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+import csv
 # backend
 # login and register
 
@@ -37,6 +41,16 @@ def comboclick(event):
 def logout():
     exit_mainpage = messagebox.askquestion("Logout", "Do you want to logout")
     if exit_mainpage == "yes":
+        mydb = mysql.connector.connect(
+            host="localhost",
+            user="root",
+            passwd=os.environ.get("sql_pass"),
+            database="schoolmanagement"
+        )
+        cursor = mydb.cursor()
+        cursor.execute(
+            "UPDATE login set log='loggedout' where log like 'loggedin'")
+        mydb.commit()
         root_main_page.destroy()
         login_page()
     else:
@@ -46,7 +60,8 @@ def logout():
 def login_exit():
     exit_mainpage = messagebox.askquestion("Exit", "Do you want to exit")
     if exit_mainpage == "yes":
-        login_root.destroy()
+        login_user_root.destroy()
+        portal()
     else:
         pass
 
@@ -60,27 +75,43 @@ def register():
     )
 
     cursor = mydb.cursor()
-    cursor.execute(
-        "CREATE table if not exists login(username varchar(100),password varchar(100))")
     username = register_entry_username.get()
-    password = register_entry_password.get()
+    password1 = register_entry_password.get()
+    password = password1.encode()
+    log = "loggedout"
+    mysalt = b'\x1e\x82\xd90f\x16>u\x05\x0f\x99m\x98r\xcc\x19'
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256,
+        length=32,
+        salt=mysalt,
+        iterations=100000,
+        backend=default_backend()
+    )
+    key1 = base64.urlsafe_b64encode(kdf.derive(password))
+    key = key1.decode()
     cursor.execute("SELECT * from login")
     data = cursor.fetchall()
     flag_username = 0
     if username == "":
-        messagebox.showinfo("Alert", "enter a valid username")
+        messagebox.showerror("Error", "enter a valid username")
     elif password == "":
-        messagebox.showinfo("Alert", "enter a valid password")
+        messagebox.showerror("Error", "enter a valid password")
+    elif len(username) < 5:
+        messagebox.showerror(
+            "Error", "username must be more than 4 characters")
+    elif len(password1) < 8 or len(password1) > 16:
+        messagebox.showerror(
+            "Error", "password must be between 8 - 16 characters")
     else:
         for check in data:
             if username == check[0]:
                 flag_username = flag_username+1
 
         if flag_username > 0:
-            messagebox.showinfo("Alert", "username already exist!")
+            messagebox.showerror("Error", "username already exist!")
         else:
-            qry = "INSERT into login values('{}','{}')".format(
-                username, password)
+            qry = "INSERT into login values('{}','{}','{}')".format(
+                username, key, log)
             cursor.execute(qry)
             mydb.commit()
             messagebox.showinfo("Alert", "user registered succefully ")
@@ -109,22 +140,37 @@ def login():
     cursor = mydb.cursor()
     cursor.execute("SELECT * FROM login")
     data = cursor.fetchall()
-    username = entry_username.get()
-    password = entry_password.get()
+    username = user_entry_username.get()
+    password1 = user_entry_password.get()
+    password = password1.encode()
+    mysalt = b'\x1e\x82\xd90f\x16>u\x05\x0f\x99m\x98r\xcc\x19'
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256,
+        length=32,
+        salt=mysalt,
+        iterations=100000,
+        backend=default_backend()
+    )
+    key1 = base64.urlsafe_b64encode(kdf.derive(password))
+    key = key1.decode()
     flag = 0
     for check in data:
-        if username == check[0] and password == check[1]:
+        if username == check[0] and key == check[1]:
             messagebox.showinfo("Alert", "login successful")
+            qry = "UPDATE login set log='loggedin' where username like '{}'".format(
+                username)
+            cursor.execute(qry)
+            mydb.commit()
             flag = flag+1
             pass
-            login_root.destroy()
-            mainpage()
-        elif username == check[0] and password != check[1]:
+            login_user_root.destroy()
+            userportal()
+        elif username == check[0] and key != check[1]:
             flag = flag+1
-            messagebox.showinfo("Alert", "incorrect password")
+            messagebox.showerror("Error", "incorrect password")
             break
     if flag == 0:
-        messagebox.showinfo("Alert", "user does not exist")
+        messagebox.showerror("Error", "user does not exist")
 
 # database
 
@@ -218,20 +264,34 @@ def clear():
 
 
 def adddata():
-    if(len(entry_Student_ID.get()) != 0):
-        addstudent(entry_Student_ID.get(), entry_firstname.get(), entry_surname.get(
-        ), entry_address.get(), entry_gender.get(), entry_mobile.get(), entry_fees.get())
-        entry_Student_ID.delete(0, END)
-        entry_firstname.delete(0, END)
-        entry_surname.delete(0, END)
-        entry_address.delete(0, END)
-        entry_gender.delete(0, END)
-        entry_mobile.delete(0, END)
-        entry_fees.delete(0, END)
-        displaydata()
-        messagebox.showinfo("Success", "student added successfully")
-    else:
-        messagebox.showinfo("Alert", "enter a valid admission number")
+    try:
+        mydb_functions = mysql.connector.connect(
+            host="localhost",
+            user="root",
+            passwd=os.environ.get("sql_pass"),
+            database="schoolmanagement"
+        )
+        cursorobj = mydb_functions.cursor()
+        qry = "SELECT * from studentdata where admno={}".format(
+            entry_Student_ID.get())
+        cursorobj.execute(qry)
+        fetch = cursorobj.fetchall()
+        if fetch == []:
+            addstudent(entry_Student_ID.get(), entry_firstname.get(), entry_surname.get(
+            ), entry_address.get(), entry_gender.get(), entry_mobile.get(), entry_fees.get())
+            entry_Student_ID.delete(0, END)
+            entry_firstname.delete(0, END)
+            entry_surname.delete(0, END)
+            entry_address.delete(0, END)
+            entry_gender.delete(0, END)
+            entry_mobile.delete(0, END)
+            entry_fees.delete(0, END)
+            displaydata()
+            messagebox.showinfo("Success", "student added successfully")
+        else:
+            messagebox.showerror("Error", "Student already exists")
+    except:
+        messagebox.showerror("Error", "enter a valid admno")
 
 
 def displaydata():
@@ -292,14 +352,143 @@ def main_exit():
     exit_mainpage = messagebox.askquestion("Exit", "Do you want to exit")
     if exit_mainpage == "yes":
         root_main_page.destroy()
+        userportal()
     else:
         pass
 
 
+def homebutton():
+    root_intro.destroy()
+    portal()
+
+
+def admin_portal():
+    portal_intro.destroy()
+    login_admin_page()
+
+
+def adminloginexit():
+    exit_mainpage = messagebox.askquestion("Exit", "Do you want to exit")
+    if exit_mainpage == "yes":
+        login_root.destroy()
+        portal()
+    else:
+        pass
+
+
+def user_portal():
+    portal_intro.destroy()
+    login_user_page()
+
+
+def student_details():
+    userportal_intro.destroy()
+    studentpage()
+
+
+def userdetails_():
+    userportal_intro.destroy()
+    userdetails()
+
+
+def userdetails_back2():
+    user_details.destroy()
+    userportal()
+
+
+def adminlogin():
+    username = admin_entry_username.get()
+    password1 = admin_entry_password.get()
+    password = password1.encode()
+    mysalt = b'\x1e\x82\xd90f\x16>u\x05\x0f\x99m\x98r\xcc\x19'
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256,
+        length=32,
+        salt=mysalt,
+        iterations=100000,
+        backend=default_backend()
+    )
+    key1 = base64.urlsafe_b64encode(kdf.derive(password))
+    key = key1.decode()
+    file = open("admin.csv", 'r')
+    reader = csv.reader(file)
+    for check in reader:
+        if username == check[0] and key == check[1]:
+            messagebox.showinfo("Alert", "login successful")
+            login_root.destroy()
+            adminportal()
+        if username != check[0]:
+            messagebox.showerror("Error", "incorrect username")
+        elif key != check[1]:
+            messagebox.showerror("Error", "incorrect password")
+
+
+def adminpasschange__():
+    adminportal_intro.destroy()
+    changeadminpass()
+
+
+def adminchangeinfo():
+    username = entry_username_admin.get()
+    password1 = entry_pass_admin.get()
+    newuser = entry_newuser_admin.get()
+    newpass = entry_newpass_admin.get()
+    password = password1.encode()
+    mysalt = b'\x1e\x82\xd90f\x16>u\x05\x0f\x99m\x98r\xcc\x19'
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256,
+        length=32,
+        salt=mysalt,
+        iterations=100000,
+        backend=default_backend()
+    )
+    key1 = base64.urlsafe_b64encode(kdf.derive(password))
+    key = key1.decode()
+
+    password2 = newpass.encode()
+    mysalt = b'\x1e\x82\xd90f\x16>u\x05\x0f\x99m\x98r\xcc\x19'
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256,
+        length=32,
+        salt=mysalt,
+        iterations=100000,
+        backend=default_backend()
+    )
+    key2 = base64.urlsafe_b64encode(kdf.derive(password2))
+    newkey = key2.decode()
+
+    flag = 0
+    file = open("admin.csv", 'r')
+    data = csv.reader(file)
+    list = [newuser, newkey]
+    for check in data:
+        if len(newuser) == 0:
+            messagebox.showerror("Error", "enter a valid username")
+        elif len(newpass) == 0:
+            messagebox.showerror("Error", "enter a valid password")
+        else:
+            if username == check[0] and key == check[1]:
+                messagebox.showinfo(
+                    "Alert", "username and password changed successfully")
+                flag = flag+1
+                file1 = open("admin.csv", 'w', newline="")
+                writer = csv.writer(file1)
+                writer.writerow(list)
+                file1.close()
+                admin_password_change.destroy()
+                adminportal()
+            elif username == check[0] and key != check[1]:
+                flag = flag+1
+                messagebox.showerror("Error", "incorrect password")
+                break
+            if flag == 0:
+                messagebox.showerror("Error", "user does not exist")
 # frontend
 # hover effects
 # login page
 # login
+
+
 def hover_login_page_exit_in(e):
     image = PhotoImage(file="assets/loginexit_2.png")
     login_exit_button.config(image=image)
@@ -461,7 +650,19 @@ def hover_exit_out(e):
     exit_button.image = image
 
 
-def mainpage():
+def hover_home_in(e):
+    image = PhotoImage(file="assets/homebutton_2.png")
+    home_button.config(image=image)
+    home_button.image = image
+
+
+def hover_home_out(e):
+    image = PhotoImage(file="assets/homebutton.png")
+    home_button.config(image=image)
+    home_button.image = image
+
+
+def studentpage():
     global add_button, display_button, clear_button, delete_button, search_button, update_button, exit_button
     global root_main_page
     global student_list
@@ -487,7 +688,7 @@ def mainpage():
     logout_button_img = PhotoImage(file="assets/logout.png")
     logout_button = Button(root_main_page, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
                            image=logout_button_img, command=logout)
-    logout_button.place(x=1150, y=10)
+    #logout_button.place(x=1150, y=10)
 
     # main frame
 
@@ -588,13 +789,13 @@ def mainpage():
         "admno", "firstname", "class", "address", "gender", "mobile no.", "fees")
     # column
     student_list.column("#0", width=0, stretch=NO)
-    student_list.column("admno", width=45, anchor=CENTER)
-    student_list.column("firstname", width=120, anchor=CENTER)
-    student_list.column("class", width=40, anchor=W)
-    student_list.column("address", width=200, anchor=CENTER)
-    student_list.column("gender", width=50, anchor=W)
-    student_list.column("mobile no.", width=70, anchor=W)
-    student_list.column("fees", width=85, anchor=CENTER)
+    student_list.column("admno", width=45, minwidth=45, anchor=CENTER)
+    student_list.column("firstname", width=120, minwidth=120, anchor=CENTER)
+    student_list.column("class", width=40, minwidth=40, anchor=W)
+    student_list.column("address", width=200, minwidth=200, anchor=CENTER)
+    student_list.column("gender", width=50, minwidth=50, anchor=W)
+    student_list.column("mobile no.", width=70, minwidth=70, anchor=W)
+    student_list.column("fees", width=85, minwidth=85, anchor=CENTER)
     # heading
     student_list.heading("#0", text="")
     student_list.heading("admno", text="admno")
@@ -618,7 +819,7 @@ def mainpage():
               foreground=[('selected', 'black')]
               )
 
-    #scroll_x.pack(side=BOTTOM, fill=X)
+    scroll_x.pack(side=BOTTOM, fill=X)
     scroll_y.pack(side=RIGHT, fill=Y)
     scroll_x.config(command=student_list.xview)
     scroll_y.config(command=student_list.yview)
@@ -692,8 +893,224 @@ def mainpage():
     root_main_page.mainloop()
 
 
-def login_page():
-    global login_root, entry_username, entry_password
+def intropage():
+    global root_intro
+    global home_button
+    root_intro = Tk()
+    root_intro.geometry("1280x720+300+100")
+    root_intro.title("School Admin Page")
+    root_intro.iconbitmap("C:\SJ\py project\icon.ico")
+    root_intro.resizable(0, 0)
+    # background
+    background_img = ImageTk.PhotoImage(Image.open("assets\\introback.png"))
+    label_background = Label(image=background_img)
+    label_background.place(x=0, y=0)
+
+    # button
+    home_button_img = PhotoImage(file="assets/homebutton.png")
+    home_button = Button(root_intro, bg="#9DFF8E", border=0, activebackground="#9DFF8E",
+                         image=home_button_img, command=homebutton)
+    home_button.place(x=575, y=380)
+
+    home_button.bind("<Enter>", hover_home_in)
+    home_button.bind("<Leave>", hover_home_out)
+    root_intro.mainloop()
+
+
+def portal():
+    global portal_intro
+    portal_intro = Tk()
+    portal_intro.geometry("1280x720+300+100")
+    portal_intro.title("School Admin Page")
+    portal_intro.iconbitmap("C:\SJ\py project\icon.ico")
+    portal_intro.resizable(0, 0)
+    # background
+    background_img = ImageTk.PhotoImage(Image.open("assets\\portal_back.png"))
+    label_background = Label(image=background_img)
+    label_background.place(x=0, y=0)
+
+    portal_button_img = PhotoImage(file="assets/adminbutton.png")
+    portal_button = Button(portal_intro, bg="#9DFF8E", border=0, activebackground="#9DFF8E",
+                           image=portal_button_img, command=admin_portal)
+    portal_button.place(x=275, y=380)
+
+    user_button_img = PhotoImage(file="assets/userbutton_2.png")
+    user_button = Button(portal_intro, bg="#9DFF8E", border=0, activebackground="#9DFF8E",
+                         image=user_button_img, command=user_portal)
+    user_button.place(x=675, y=380)
+
+    portal_intro.mainloop()
+
+
+def adminportal():
+    global adminportal_intro
+    adminportal_intro = Tk()
+    adminportal_intro.geometry("1280x720+300+100")
+    adminportal_intro.title("School Admin Page")
+    adminportal_intro.iconbitmap("C:\SJ\py project\icon.ico")
+    adminportal_intro.resizable(0, 0)
+    # background
+    background_img = ImageTk.PhotoImage(Image.open("assets\\admin_back.png"))
+    label_background = Label(image=background_img)
+    label_background.place(x=0, y=0)
+
+    portal_button_img = PhotoImage(file="assets/adminpassbutton_2.png")
+    portal_button = Button(adminportal_intro, bg="#9DFF8E", border=0, activebackground="#9DFF8E",
+                           image=portal_button_img, command=adminpasschange__)
+    portal_button.place(x=550, y=310)
+
+    user_button_img = PhotoImage(file="assets/register_adminbutton.png")
+    user_button = Button(adminportal_intro, bg="#9DFF8E", border=0, activebackground="#9DFF8E",
+                         image=user_button_img)
+    user_button.place(x=550, y=430)
+
+    adminportal_intro.mainloop()
+
+
+def userportal():
+    global userportal_intro
+    userportal_intro = Tk()
+    userportal_intro.geometry("1280x720+300+100")
+    userportal_intro.title("School Admin Page")
+    userportal_intro.iconbitmap("C:\SJ\py project\icon.ico")
+    userportal_intro.resizable(0, 0)
+    # background
+    background_img = ImageTk.PhotoImage(Image.open("assets\\user_back.png"))
+    label_background = Label(image=background_img)
+    label_background.place(x=0, y=0)
+
+    portal_button_img = PhotoImage(file="assets/studentbutton_2.png")
+    portal_button = Button(userportal_intro, bg="#9DFF8E", border=0, activebackground="#9DFF8E",
+                           image=portal_button_img, command=student_details)
+    portal_button.place(x=100, y=330)
+
+    user_button_img = PhotoImage(file="assets/userdetailsbutton.png")
+    user_button = Button(userportal_intro, bg="#9DFF8E", border=0, activebackground="#9DFF8E",
+                         image=user_button_img, command=userdetails_)
+    user_button.place(x=100, y=450)
+
+    font = ("Helvetica", 50)
+    mydb_functions = mysql.connector.connect(
+        host="localhost",
+        user="root",
+        passwd=os.environ.get("sql_pass"),
+        database="schoolmanagement"
+    )
+    cursorobj = mydb_functions.cursor()
+    cursorobj.execute("SELECT count(*) from studentdata")
+    a = cursorobj.fetchall()
+    b = a[0]
+    c = b[0]
+    total_label = Label(
+        userportal_intro, text="TOTAL NUMBER  ", font=font, bg="#ADFF90", fg="#FFFFFF")
+    total2_label = Label(
+        userportal_intro, text="OF STUDENTS : " + str(c), font=font, bg="#6AFCB1", fg="#FFFFFF")
+
+    total_label.place(x=450, y=350)
+    total2_label.place(x=450, y=430)
+
+    userportal_intro.mainloop()
+
+
+def userdetails():
+    global user_details
+    user_details = Tk()
+    user_details.geometry("1280x720+300+100")
+    user_details.title("User Details")
+    user_details.iconbitmap("C:\SJ\py project\icon.ico")
+    user_details.resizable(0, 0)
+    # background
+    font = ("Helvetica", 30)
+    background_img = ImageTk.PhotoImage(
+        Image.open("assets\\userdetailsback.png"))
+    label_background = Label(image=background_img)
+    label_background.pack()
+    label_name = Label(user_details, text="Name         : ",
+                       font=font, bg="#C1FF9A", fg="#3d403f").place(x=100, y=250)
+    label_age = Label(user_details, text="Age            : ",
+                      font=font, bg="#C1FF9A", fg="#3d403f").place(x=100, y=325)
+    label_username = Label(user_details, text="Mobile        : ",
+                           font=font, bg="#C1FF9A", fg="#3d403f").place(x=100, y=400)
+    label_username = Label(user_details, text="Username  : ",
+                           font=font, bg="#C1FF9A", fg="#3d403f").place(x=100, y=475)
+    user_back_img = PhotoImage(file="assets/userdetailsbackbutton.png")
+    user_back_button = Button(user_details, bg="#9DFF8E", border=0, activebackground="#9DFF8E",
+                              image=user_back_img, command=userdetails_back2)
+    user_back_button.place(x=550, y=600)
+    mainloop()
+
+
+def changeadminpass():
+    global admin_password_change
+    global entry_pass_admin, entry_username_admin, entry_newuser_admin, entry_newpass_admin
+    admin_password_change = Tk()
+    admin_password_change.geometry("1280x720+300+100")
+    admin_password_change.title("User Details")
+    admin_password_change.iconbitmap("C:\SJ\py project\icon.ico")
+    admin_password_change.resizable(0, 0)
+    # background
+    font = ("Helvetica", 25)
+    background_img = ImageTk.PhotoImage(
+        Image.open("assets\\adminpasschange.png"))
+    label_background = Label(image=background_img)
+    label_background.pack()
+    frame_change = Frame(admin_password_change, width=800,
+                         height=450, bg="white")
+    frame_change.place(x=240, y=200)
+    Label(frame_change, text="Username          :",
+          font=font, bg="#FFFFFF", fg="#2c3036").place(x=40, y=20)
+
+    entry_username_admin = Entry(frame_change, width=20,
+                                 border=0, font=font)
+    entry_username_admin.place(x=350, y=25)
+    Frame(frame_change, width=363, height=2, bg="#64FEB5",).place(x=350, y=65)
+
+    Label(frame_change, text="Password           :",
+          font=font, bg="#FFFFFF", fg="#2c3036").place(x=40, y=105)
+    entry_pass_admin = Entry(frame_change, width=20,
+                             border=0, font=font, show="*")
+    entry_pass_admin.place(x=350, y=110)
+
+    Frame(frame_change, width=363, height=2, bg="#64FEB5",).place(x=350, y=150)
+
+    Label(frame_change, text="New username   :",
+          font=font, bg="#FFFFFF", fg="#2c3036").place(x=40, y=190)
+
+    entry_newuser_admin = Entry(frame_change, width=20,
+                                border=0, font=font)
+    entry_newuser_admin.place(x=350, y=195)
+    Frame(frame_change, width=363, height=2, bg="#64FEB5",).place(x=350, y=235)
+
+    Label(frame_change, text="New Password   :",
+          font=font, bg="#FFFFFF", fg="#2c3036").place(x=40, y=275)
+    entry_newpass_admin = Entry(frame_change, width=20,
+                                border=0, font=font, show="*")
+    entry_newpass_admin.place(x=350, y=280)
+    Frame(frame_change, width=363, height=2, bg="#64FEB5",).place(x=350, y=320)
+
+    add_button_img = PhotoImage(file="assets/adminpasschangebutton.png")
+    change_button = Button(frame_change, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
+                           image=add_button_img, command=adminchangeinfo)
+    change_button.place(x=300, y=350)
+
+    mainloop()
+
+
+def registeruser():
+    register_user = Tk()
+    register_user.geometry("1280x720+300+100")
+    register_user.title("School Admin Page - LOGIN")
+    register_user.iconbitmap("C:\SJ\py project\icon.ico")
+    register_user.resizable(0, 0)
+
+    background_img = ImageTk.PhotoImage(
+        Image.open("assets\\userregisterback.png"))
+    label_background = Label(image=background_img)
+    label_background.place(x=0, y=0)
+
+
+def login_admin_page():
+    global login_root, admin_entry_username, admin_entry_password
     global login_button
     global register_button_log
     global login_exit_button
@@ -722,9 +1139,9 @@ def login_page():
     username_font = ("Helvetica", 13)
     label_username_text.config(font=username_font)
     label_username_text.place(x=470, y=250)
-    entry_username = Entry(login_root, width=20, border=0,)
-    entry_username.config(font=username_font)
-    entry_username.place(x=580, y=250)
+    admin_entry_username = Entry(login_root, width=20, border=0,)
+    admin_entry_username.config(font=username_font)
+    admin_entry_username.place(x=580, y=250)
     Frame(login_root, width=180, height=2, bg="#64FEB5").place(x=580, y=272)
     username_img = PhotoImage(file="assets/username.png")
     label_username_img = Label(
@@ -736,9 +1153,9 @@ def login_page():
     password_font = ("Helvetica", 13)
     label_password_text.config(font=password_font)
     label_password_text.place(x=470, y=320)
-    entry_password = Entry(login_root, width=20, border=0, show="*")
-    entry_password.config(font=password_font)
-    entry_password.place(x=580, y=320)
+    admin_entry_password = Entry(login_root, width=20, border=0, show="*")
+    admin_entry_password.config(font=password_font)
+    admin_entry_password.place(x=580, y=320)
     Frame(login_root, width=180, height=2, bg="#64FEB5").place(x=580, y=342)
     password_img = PhotoImage(file="assets/password.png")
     label_password_img = Label(
@@ -748,13 +1165,98 @@ def login_page():
     # button
     login_button_img = PhotoImage(file="assets/login_button.png")
     login_button = Button(login_root, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
-                          image=login_button_img, command=login)
+                          image=login_button_img, command=adminlogin)
     login_button.place(x=570, y=400)
 
     register_button_img = PhotoImage(file="assets/register_button.png")
     register_button_log = Button(login_root, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
                                  image=register_button_img, command=login_to_register)
-    register_button_log.place(x=570, y=470)
+    #register_button_log.place(x=570, y=470)
+
+    exit_button_img = PhotoImage(file="assets/loginexit.png")
+    login_exit_button = Button(login_frame, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
+                               image=exit_button_img, command=adminloginexit)
+    login_exit_button.place(x=725, y=95)
+
+    login_button.bind("<Enter>", hover_login_in)
+    login_button.bind("<Leave>", hover_login_out)
+
+    register_button_log.bind("<Enter>", hover_register_log_in)
+    register_button_log.bind("<Leave>", hover_register_log_out)
+
+    login_exit_button.bind("<Enter>", hover_login_page_exit_in)
+    login_exit_button.bind("<Leave>", hover_login_page_exit_out)
+
+    login_root.mainloop()
+
+
+def login_user_page():
+    global login_user_root, user_entry_username, user_entry_password
+    global login_button
+    global register_button_log
+    global login_exit_button
+    login_user_root = Tk()
+    login_user_root.geometry("1280x720+300+100")
+    login_user_root.title("School Admin Page - LOGIN")
+    login_user_root.iconbitmap("C:\SJ\py project\icon.ico")
+    login_user_root.resizable(0, 0)
+
+    background_img = ImageTk.PhotoImage(Image.open("assets\\background.png"))
+    label_background = Label(image=background_img)
+    label_background.place(x=0, y=0)
+
+    # login_frame
+    login_frame = Frame(login_user_root, width=400, height=500,
+                        bg="white").place(x=450, y=90)
+    frame1 = Frame(login_user_root, width=30, height=40, bg="white")
+
+    # Login
+    login_img = ImageTk.PhotoImage(Image.open("assets\\Login.png"))
+    label_login = Label(image=login_img, border=0, bg="#FFFFFF")
+    label_login.place(x=510, y=120)
+
+    # username
+    label_username_text = Label(
+        login_user_root, text="Username ", bg="#FFFFFF")
+    username_font = ("Helvetica", 13)
+    label_username_text.config(font=username_font)
+    label_username_text.place(x=470, y=250)
+    user_entry_username = Entry(login_user_root, width=20, border=0,)
+    user_entry_username.config(font=username_font)
+    user_entry_username.place(x=580, y=250)
+    Frame(login_user_root, width=180, height=2,
+          bg="#64FEB5").place(x=580, y=272)
+    username_img = PhotoImage(file="assets/username.png")
+    label_username_img = Label(
+        image=username_img, width=25, height=25, bg="#FFFFFF")
+    label_username_img.place(x=550, y=250)
+
+    # password
+    label_password_text = Label(
+        login_user_root, text="Password ", bg="#FFFFFF")
+    password_font = ("Helvetica", 13)
+    label_password_text.config(font=password_font)
+    label_password_text.place(x=470, y=320)
+    user_entry_password = Entry(login_user_root, width=20, border=0, show="*")
+    user_entry_password.config(font=password_font)
+    user_entry_password.place(x=580, y=320)
+    Frame(login_user_root, width=180, height=2,
+          bg="#64FEB5").place(x=580, y=342)
+    password_img = PhotoImage(file="assets/password.png")
+    label_password_img = Label(
+        image=password_img, width=25, height=25, bg="#FFFFFF")
+    label_password_img.place(x=550, y=320)
+
+    # button
+    login_button_img = PhotoImage(file="assets/login_button.png")
+    login_button = Button(login_user_root, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
+                          image=login_button_img, command=login)
+    login_button.place(x=570, y=400)
+
+    register_button_img = PhotoImage(file="assets/register_button.png")
+    register_button_log = Button(login_user_root, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
+                                 image=register_button_img, command=login_to_register)
+    #register_button_log.place(x=570, y=470)
 
     exit_button_img = PhotoImage(file="assets/loginexit.png")
     login_exit_button = Button(login_frame, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
@@ -770,90 +1272,27 @@ def login_page():
     login_exit_button.bind("<Enter>", hover_login_page_exit_in)
     login_exit_button.bind("<Leave>", hover_login_page_exit_out)
 
-    login_root.mainloop()
-
-
-def register_page():
-    global register_root, register_entry_username, register_entry_password
-    global register_button, login_button_reg
-    register_root = Tk()
-    register_root.geometry("1280x720+300+100")
-    register_root.title("School Admin Page - REGISTER")
-    register_root.iconbitmap("C:\SJ\py project\icon.ico")
-    register_root.resizable(0, 0)
-    # background
-    background_img = ImageTk.PhotoImage(Image.open("assets\\background.png"))
-    label_background = Label(image=background_img)
-    label_background.place(x=0, y=0)
-
-    # register_frame
-    Frame(register_root, width=400, height=500, bg="white").place(x=450, y=90)
-    frame1 = Frame(register_root, width=30, height=40, bg="white")
-
-    # register
-    login_img = ImageTk.PhotoImage(Image.open("assets\\register_img.png"))
-    label_login = Label(image=login_img, border=0, bg="#FFFFFF")
-    label_login.place(x=510, y=120)
-
-    # username
-    label_username_text = Label(register_root, text="Username ", bg="#FFFFFF")
-    username_font = ("Helvetica", 13)
-    label_username_text.config(font=username_font)
-    label_username_text.place(x=470, y=250)
-    register_entry_username = Entry(register_root, width=20, border=0,)
-    register_entry_username.config(font=username_font)
-    register_entry_username.place(x=580, y=250)
-    Frame(register_root, width=180, height=2, bg="#64FEB5").place(x=580, y=272)
-    username_img = PhotoImage(file="assets/username.png")
-    label_username_img = Label(
-        image=username_img, width=25, height=25, bg="#FFFFFF")
-    label_username_img.place(x=550, y=250)
-
-    # password
-    label_password_text = Label(register_root, text="Password ", bg="#FFFFFF")
-    password_font = ("Helvetica", 13)
-    label_password_text.config(font=password_font)
-    label_password_text.place(x=470, y=320)
-    register_entry_password = Entry(
-        register_root, width=20, border=0, show="*")
-    register_entry_password.config(font=password_font)
-    register_entry_password.place(x=580, y=320)
-    Frame(register_root, width=180, height=2, bg="#64FEB5").place(x=580, y=342)
-    password_img = PhotoImage(file="assets/password.png")
-    label_password_img = Label(
-        image=password_img, width=25, height=25, bg="#FFFFFF")
-    label_password_img.place(x=550, y=320)
-
-    # button
-    register_button_img = PhotoImage(file="assets/register_button.png")
-    register_button = Button(register_root, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
-                             image=register_button_img, command=register)
-    register_button.place(x=570, y=400)
-
-    login_button_img = PhotoImage(file="assets/login_button.png")
-    login_button_reg = Button(register_root, width=250, height=50, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
-                              image=login_button_img, command=register_to_login)
-    login_button_reg.place(x=520, y=470)
-    register_button.bind("<Enter>", hover_register_in)
-    register_button.bind("<Leave>", hover_register_out)
-
-    login_button_reg.bind("<Enter>", hover_login_reg_in)
-    login_button_reg.bind("<Leave>", hover_login_reg_out)
-
-    register_root.mainloop()
+    login_user_root.mainloop()
 
 
 database = mysql.connector.connect(
     host="localhost",
     user="root",
     passwd=os.environ.get("sql_pass"),
-    database="schoolmanagement"
 )
 
 cursorobject = database.cursor()
-cursorobject.execute(
-    "CREATE table if not exists login(username varchar(100),password varchar(100))")
-cursorobject.execute(
-    "CREATE table if not exists studentdata(admno int(10),firstname varchar(100),surname varchar(100),addresss varchar(200),gender varchar(10),mobile varchar(20),fees varchar(5000))")
+cursorobject.execute("CREATE database if not exists schoolmanagement")
+cursorobject.execute("USE schoolmanagement")
+# cursorobject.execute(
+# "CREATE table if not exists login(username varchar(100),password varchar(100),mobile varchar(20),age int(10),name varchar(100),log varchar(10))")
+# cursorobject.execute(
+# "CREATE table if not exists studentdata(admno int(10),studentname varchar(100),class varchar(20),addresss varchar(200),gender varchar(10),mobile varchar(20),fees varchar(5000))")
+cursorobject.execute("SELECT * from login")
+fetch = cursorobject.fetchall()
+# for check in fetch:
+# if check[2] == "loggedin":
+# userportal()
+# else:
+intropage()
 database.close()
-login_page()
