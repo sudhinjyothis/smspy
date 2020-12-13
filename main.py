@@ -58,8 +58,7 @@ def logout():
 
 
 def login_exit():
-    exit_mainpage = messagebox.askquestion("Exit", "Do you want to exit")
-    if exit_mainpage == "yes":
+    if messagebox.askquestion("Exit", "Do you want to exit") == "yes":
         login_user_root.destroy()
         portal()
     else:
@@ -138,7 +137,9 @@ def login():
     )
 
     cursor = mydb.cursor()
-    cursor.execute("SELECT * FROM login")
+    qry1 = "SELECT * FROM userdata where username like '{}'".format(
+        user_entry_username.get())
+    cursor.execute(qry1)
     data = cursor.fetchall()
     username = user_entry_username.get()
     password1 = user_entry_password.get()
@@ -154,23 +155,21 @@ def login():
     key1 = base64.urlsafe_b64encode(kdf.derive(password))
     key = key1.decode()
     flag = 0
-    for check in data:
-        if username == check[0] and key == check[1]:
-            messagebox.showinfo("Alert", "login successful")
-            qry = "UPDATE login set log='loggedin' where username like '{}'".format(
+    try:
+        check = data[0]
+        if username == check[5] and key == check[6]:
+            messagebox.showinfo("Alert", "Login Successful")
+            qry2 = "UPDATE userdata set log='loggedin' where username ='{}'".format(
                 username)
-            cursor.execute(qry)
+            cursor.execute(qry2)
             mydb.commit()
-            flag = flag+1
-            pass
             login_user_root.destroy()
             userportal()
-        elif username == check[0] and key != check[1]:
-            flag = flag+1
-            messagebox.showerror("Error", "incorrect password")
-            break
-    if flag == 0:
-        messagebox.showerror("Error", "user does not exist")
+        elif username == check[5] and key != check[6]:
+            messagebox.showerror("Error", "Incorrect Password")
+    except:
+        messagebox.showerror("Error", "User does not exist")
+    mydb.close()
 
 # database
 
@@ -349,12 +348,8 @@ def updatedata():
 
 
 def main_exit():
-    exit_mainpage = messagebox.askquestion("Exit", "Do you want to exit")
-    if exit_mainpage == "yes":
-        root_main_page.destroy()
-        userportal()
-    else:
-        pass
+    root_main_page.destroy()
+    userportal()
 
 
 def homebutton():
@@ -368,8 +363,7 @@ def admin_portal():
 
 
 def adminloginexit():
-    exit_mainpage = messagebox.askquestion("Exit", "Do you want to exit")
-    if exit_mainpage == "yes":
+    if messagebox.askquestion("Exit", "Do you want to exit") == "yes":
         login_root.destroy()
         portal()
     else:
@@ -377,8 +371,21 @@ def adminloginexit():
 
 
 def user_portal():
-    portal_intro.destroy()
-    login_user_page()
+    mydb_functions = mysql.connector.connect(
+        host="localhost",
+        user="root",
+        passwd=os.environ.get("sql_pass"),
+        database="schoolmanagement"
+    )
+    cursorobj = mydb_functions.cursor()
+    cursorobj.execute("SELECT * from userdata where log='loggedin'")
+    fetch = cursorobj.fetchall()
+    if not fetch:
+        portal_intro.destroy()
+        login_user_page()
+    else:
+        portal_intro.destroy()
+        userportal()
 
 
 def student_details():
@@ -394,6 +401,11 @@ def userdetails_():
 def userdetails_back2():
     user_details.destroy()
     userportal()
+
+
+def register_user_button_func():
+    adminportal_intro.destroy()
+    usermanagepage()
 
 
 def adminlogin():
@@ -483,183 +495,460 @@ def adminchangeinfo():
                 break
             if flag == 0:
                 messagebox.showerror("Error", "user does not exist")
-# frontend
-# hover effects
-# login page
-# login
 
 
-def hover_login_page_exit_in(e):
-    image = PhotoImage(file="assets/loginexit_2.png")
-    login_exit_button.config(image=image)
-    login_exit_button.image = image
+def userrec(event):
+    global sd1
+    searchstd = user_student_list.focus()
+    sd1 = user_student_list.item(searchstd, 'values')
+    entry_user_ID.delete(0, END)
+    entry_user_ID.insert(END, sd1[0])
+    entry_user_name.delete(0, END)
+    entry_user_name.insert(END, sd1[1])
+    entry_user_address.delete(0, END)
+    entry_user_address.insert(END, sd1[2])
+    entry_user_gender.delete(0, END)
+    entry_user_gender.insert(END, sd1[3])
+    entry_user_mobile.delete(0, END)
+    entry_user_mobile.insert(END, sd1[4])
+    entry_user_username.delete(0, END)
+    entry_user_username.insert(END, sd1[5])
 
 
-def hover_login_page_exit_out(e):
-    image = PhotoImage(file="assets/loginexit.png")
-    login_exit_button.config(image=image)
-    login_exit_button.image = image
+def displayuser():
+    mydb_functions = mysql.connector.connect(
+        host="localhost",
+        user="root",
+        passwd=os.environ.get("sql_pass"),
+        database="schoolmanagement"
+    )
+    cursorobj = mydb_functions.cursor()
+    cursorobj.execute("SELECT * from userdata order by userid")
+    rows = cursorobj.fetchall()
+    for record in user_student_list.get_children():
+        user_student_list.delete(record)
+    for row in rows:
+        user_student_list.insert(parent='', index='end', text='', values=row)
+    mydb_functions.close()
 
 
-def hover_main_page_logout_in(e):
-    image = PhotoImage(file="assets/logout_2.png")
-    logout_button.config(image=image)
-    logout_button.image = image
+def adduser():
+    mydb_user = mysql.connector.connect(
+        host="localhost",
+        user="root",
+        passwd=os.environ.get("sql_pass"),
+        database="schoolmanagement"
+    )
+    password1 = entry_user_password.get()
+    password = password1.encode()
+    mysalt = b'\x1e\x82\xd90f\x16>u\x05\x0f\x99m\x98r\xcc\x19'
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256,
+        length=32,
+        salt=mysalt,
+        iterations=100000,
+        backend=default_backend()
+    )
+    key1 = base64.urlsafe_b64encode(kdf.derive(password))
+    key = key1.decode()
+    cursorobj = mydb_user.cursor()
+    cursorobj.execute("SELECT * from userdata")
+    fetch = cursorobj.fetchall()
+    flag = 0
+    log = 'loggedout'
+    for check in fetch:
+        if entry_user_ID.get() == str(check[0]):
+            flag = flag+1
+            messagebox.showerror("Error", "UserID already Exist")
+        if check[5] == entry_user_username.get():
+            flag = flag+1
+            messagebox.showerror("Error", "Username already Exist")
+    if flag == 0:
+        if len(entry_user_ID.get()) == 0:
+            messagebox.showerror("Error", "enter a valid ID")
+        elif len(entry_user_username.get()) < 5:
+            messagebox.showerror(
+                "Error", "Username must be atleast 5 characters long")
+        elif len(entry_user_password.get()) < 8:
+            messagebox.showerror(
+                "Error", "Password must be atleast 8 characters long")
+        else:
+            qry = "INSERT into userdata values({},'{}','{}','{}','{}','{}','{}','{}')".format(entry_user_ID.get(), entry_user_name.get(
+            ), entry_user_address.get(), entry_user_gender.get(), entry_user_mobile.get(), entry_user_username.get(), key, log)
+            cursorobj.execute(qry)
+            mydb_user.commit()
+            mydb_user.close()
+            messagebox.showinfo("Alert", "User added  successfully")
+            displayuser()
+            entry_user_ID.delete(0, END)
+            entry_user_name.delete(0, END)
+            entry_user_address.delete(0, END)
+            entry_user_gender.delete(0, END)
+            entry_user_mobile.delete(0, END)
+            entry_user_username.delete(0, END)
+            entry_user_password.delete(0, END)
+            user_search_entry.delete(0, END)
+            entry_user_password.delete(0, END)
 
 
-def hover_main_page_logout_out(e):
-    image = PhotoImage(file="assets/logout.png")
-    logout_button.config(image=image)
-    logout_button.image = image
+def userclear():
+    entry_user_ID.delete(0, END)
+    entry_user_name.delete(0, END)
+    entry_user_address.delete(0, END)
+    entry_user_gender.delete(0, END)
+    entry_user_mobile.delete(0, END)
+    entry_user_username.delete(0, END)
+    entry_user_password.delete(0, END)
+    user_search_entry.delete(0, END)
+    for record in user_student_list.get_children():
+        user_student_list.delete(record)
 
 
-def hover_login_in(e):
-    image = PhotoImage(file="assets/login_button_2.png")
-    login_button.config(image=image)
-    login_button.image = image
+def userdelete():
+    mydb_user = mysql.connector.connect(
+        host="localhost",
+        user="root",
+        passwd=os.environ.get("sql_pass"),
+        database="schoolmanagement"
+    )
+    cursorobj = mydb_user.cursor()
+    if len(entry_user_ID.get()) == 0:
+        messagebox.showerror("Error", "enter a valid ID")
+    else:
+        qry = "DELETE from userdata where userid={}".format(
+            entry_user_ID.get())
+        cursorobj.execute(qry)
+        mydb_user.commit()
+        mydb_user.close()
+        messagebox.showinfo("Alert", "User deleted successfully")
+        entry_user_ID.delete(0, END)
+        entry_user_name.delete(0, END)
+        entry_user_address.delete(0, END)
+        entry_user_gender.delete(0, END)
+        entry_user_mobile.delete(0, END)
+        entry_user_username.delete(0, END)
+        entry_user_password.delete(0, END)
+        displayuser()
 
 
-def hover_login_out(e):
-    image = PhotoImage(file="assets/login_button.png")
-    login_button.config(image=image)
-    login_button.image = image
+def searchuser():
+    mydb_user = mysql.connector.connect(
+        host="localhost",
+        user="root",
+        passwd=os.environ.get("sql_pass"),
+        database="schoolmanagement"
+    )
+    cursorobj = mydb_user.cursor()
+    flag = 0
+    if len(user_search_entry.get()) == 0:
+        messagebox.showerror("Error", "enter a valid ID")
+    else:
+        qry = "SELECT * from userdata where userid={}".format(
+            user_search_entry.get())
+        cursorobj.execute(qry)
+        rows = cursorobj.fetchall()
+        if not rows:
+            flag = flag+1
+        for record in user_student_list.get_children():
+            user_student_list.delete(record)
+        for row in rows:
+            user_student_list.insert(
+                parent='', index='end', text='', values=row)
+
+    if flag > 0:
+        messagebox.showinfo("Alert", "user not found")
+    mydb_user.close()
 
 
-def hover_register_log_in(e):
-    image = PhotoImage(file="assets/register_button_2.png")
-    register_button_log.config(image=image)
-    register_button_log.image = image
+def updateuser():
+    mydb_user = mysql.connector.connect(
+        host="localhost",
+        user="root",
+        passwd=os.environ.get("sql_pass"),
+        database="schoolmanagement"
+    )
+    cursorobj = mydb_user.cursor()
+    log = 'loggedout'
+    password1 = entry_user_password.get()
+    password = password1.encode()
+    mysalt = b'\x1e\x82\xd90f\x16>u\x05\x0f\x99m\x98r\xcc\x19'
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256,
+        length=32,
+        salt=mysalt,
+        iterations=100000,
+        backend=default_backend()
+    )
+    key1 = base64.urlsafe_b64encode(kdf.derive(password))
+    key = key1.decode()
+    if len(entry_user_ID.get()) == 0:
+        messagebox.showerror("Error", "enter a valid ID")
+    elif len(entry_user_username.get()) < 5:
+        messagebox.showerror(
+            "Error", "Username must be atleast 5 characters long")
+    elif len(entry_user_password.get()) < 8:
+        messagebox.showerror(
+            "Error", "Password must be atleast 8 characters long")
+    else:
+        qry = "DELETE from userdata where userid={}".format(
+            entry_user_ID.get())
+        cursorobj.execute(qry)
+        mydb_user.commit()
+        qry = "INSERT into userdata values({},'{}','{}','{}','{}','{}','{}','{}')".format(entry_user_ID.get(), entry_user_name.get(
+        ), entry_user_address.get(), entry_user_gender.get(), entry_user_mobile.get(), entry_user_username.get(), key, log)
+        cursorobj.execute(qry)
+        mydb_user.commit()
+        messagebox.showinfo("Alert", "user updated successfully")
+        displayuser()
 
 
-def hover_register_log_out(e):
-    image = PhotoImage(file="assets/register_button.png")
-    register_button_log.config(image=image)
-    register_button_log.image = image
+def userexit():
+    root_user_manage.destroy()
+    adminportal()
 
 
-# register
+def portalpagexit():
+    if messagebox.askquestion("Exit", "Do you want to exit") == "yes":
+        portal_intro.destroy()
+    else:
+        pass
 
 
-def hover_register_in(e):
-    image = PhotoImage(file="assets/register_button_2.png")
-    register_button.config(image=image)
-    register_button.image = image
+def adminportalexit():
+    if messagebox.askquestion("Exit", "Do you want to exit") == "yes":
+        adminportal_intro.destroy()
+        portal()
+    else:
+        pass
 
 
-def hover_register_out(e):
-    image = PhotoImage(file="assets/register_button.png")
-    register_button.config(image=image)
-    register_button.image = image
+def adminpasschangeexit():
+    admin_password_change.destroy()
+    adminportal()
 
 
-def hover_login_reg_in(e):
-    image = PhotoImage(file="assets/login_button_2.png")
-    login_button_reg.config(image=image)
-    login_button_reg.image = image
+def userportalexit():
+    if messagebox.askquestion("Exit", "Logout and Exit") == "yes":
+        mydb = mysql.connector.connect(
+            host="localhost",
+            user="root",
+            passwd=os.environ.get("sql_pass"),
+            database="schoolmanagement"
+        )
+
+        cursor = mydb.cursor()
+        cursor.execute(
+            "UPDATE userdata set log='loggedout' where log='loggedin'")
+        mydb.commit()
+        mydb.close()
+        userportal_intro.destroy()
+        portal()
+    else:
+        userportal_intro.destroy()
+        portal()
 
 
-def hover_login_reg_out(e):
-    image = PhotoImage(file="assets/login_button.png")
-    login_button_reg.config(image=image)
-    login_button_reg.image = image
-
-# mainpage
+def enterlogin(e):
+    login()
 
 
-def hover_add_button_in(e):
-    image = PhotoImage(file="assets/newstud_2.png")
-    add_button.config(image=image)
-    add_button.image = image
+def adminenterlogin(e):
+    adminlogin()
 
 
-def hover_add_button_out(e):
-    image = PhotoImage(file="assets/newstud.png")
-    add_button.config(image=image)
-    add_button.image = image
+def usermanagepage():
+    global add_user, display_user, clear_user, delete_user, search_user, update_user, exit_user
+    global root_user_manage, user_search_entry
+    global user_student_list
+    global entry_user_ID, entry_user_name, entry_user_address, entry_user_gender, entry_user_mobile, entry_user_username, entry_user_password
+    global combobox
+    root_user_manage = Tk()
+    root_user_manage.geometry("1280x720+300+100")
+    root_user_manage.title("User management")
+    root_user_manage.iconbitmap("C:\SJ\py project\icon.ico")
+    root_user_manage.resizable(0, 0)
+    # background
+    background_img = ImageTk.PhotoImage(Image.open("assets\\background.png"))
+    label_background = Label(image=background_img)
+    label_background.place(x=0, y=0)
+    # top frame
+    title_img = ImageTk.PhotoImage(Image.open("assets\\title_user.png"))
+    label_title = Label(image=title_img, width=1257, bg="#FFFFFF")
+    label_title.place(x=10, y=5)
 
+    # logout
+    logout_button_img = PhotoImage(file="assets/logout.png")
+    logout_button = Button(root_user_manage, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
+                           image=logout_button_img)
+    # logout_button.place(x=1150, y=10)
 
-def hover_display_in(e):
-    image = PhotoImage(file="assets/display_2.png")
-    display_button.config(image=image)
-    display_button.image = image
+    # main frame
 
+    # left frame
+    frame_left = Frame(root_user_manage, width=600, height=500, bg="white")
+    frame_left.place(x=11, y=113)
 
-def hover_display_out(e):
-    image = PhotoImage(file="assets/display.png")
-    display_button.config(image=image)
-    display_button.image = image
+    # content text
+    left_frame_font = ("Helvetica", 15)
+    Label(frame_left, text="User ID         :",
+          font=left_frame_font, bg="#FFFFFF", fg="#2c3036").place(x=40, y=40)
+    Label(frame_left, text="Name            :",
+          font=left_frame_font, bg="#FFFFFF", fg="#2c3036").place(x=40, y=100)
+    Label(frame_left, text="Address        :",
+          font=left_frame_font, bg="#FFFFFF", fg="#2c3036").place(x=40, y=160)
+    Label(frame_left, text="Gender         :",
+          font=left_frame_font, bg="#FFFFFF", fg="#2c3036").place(x=40, y=220)
+    Label(frame_left, text="Mobile No.    :",
+          font=left_frame_font, bg="#FFFFFF", fg="#2c3036").place(x=40, y=280)
+    Label(frame_left, text="Username     :",
+          font=left_frame_font, bg="#FFFFFF", fg="#2c3036").place(x=40, y=340)
+    Label(frame_left, text="Password     :",
+          font=left_frame_font, bg="#FFFFFF", fg="#2c3036").place(x=40, y=400)
 
+    # content entry fields
 
-def hover_clear_in(e):
-    image = PhotoImage(file="assets/clear_2.png")
-    clear_button.config(image=image)
-    clear_button.image = image
+    entry_user_ID = Entry(frame_left, width=30,
+                          border=0, font=left_frame_font)
+    entry_user_ID.place(x=200, y=40)
 
+    entry_user_name = Entry(frame_left, width=30,
+                            border=0, font=left_frame_font)
+    entry_user_name.place(x=200, y=100)
 
-def hover_clear_out(e):
-    image = PhotoImage(file="assets/clear.png")
-    clear_button.config(image=image)
-    clear_button.image = image
+    entry_user_address = Entry(frame_left, width=30,
+                               border=0, font=left_frame_font)
+    entry_user_address.place(x=200, y=162)
 
+    entry_user_gender = Entry(frame_left, width=30,
+                              border=0, font=left_frame_font)
+    entry_user_gender.place(x=200, y=223)
 
-def hover_delete_in(e):
-    image = PhotoImage(file="assets/delete_2.png")
-    delete_button.config(image=image)
-    delete_button.image = image
+    entry_user_mobile = Entry(frame_left, width=30,
+                              border=0, font=left_frame_font)
+    entry_user_mobile.place(x=200, y=285)
 
+    entry_user_username = Entry(frame_left, width=30,
+                                border=0, font=left_frame_font)
+    entry_user_username.place(x=200, y=343)
 
-def hover_delete_out(e):
-    image = PhotoImage(file="assets/delete.png")
-    delete_button.config(image=image)
-    delete_button.image = image
+    entry_user_password = Entry(frame_left, width=30,
+                                border=0, font=left_frame_font, show="*")
+    entry_user_password.place(x=200, y=403)
 
+    Frame(frame_left, width=331, height=2, bg="#64FEB5",).place(x=200, y=68)
+    Frame(frame_left, width=331, height=2, bg="#64FEB5",).place(x=200, y=127)
+    Frame(frame_left, width=331, height=2, bg="#64FEB5",).place(x=200, y=189)
+    Frame(frame_left, width=331, height=2, bg="#64FEB5",).place(x=200, y=250)
+    Frame(frame_left, width=331, height=2, bg="#64FEB5",).place(x=200, y=311)
+    Frame(frame_left, width=331, height=2, bg="#64FEB5",).place(x=200, y=370)
+    Frame(frame_left, width=331, height=2, bg="#64FEB5",).place(x=200, y=430)
 
-def hover_search_in(e):
-    image = PhotoImage(file="assets/search_2.png")
-    search_button.config(image=image)
-    search_button.image = image
+    # right frame
+    right_frame_font = ("Helvetica", 9)
+    frame_right = Frame(root_user_manage, width=651, height=500, bg="white")
+    frame_right.place(x=619, y=113)
+    # content
+    right_title_img = ImageTk.PhotoImage(
+        Image.open("assets\\user-detail.png"))
+    right_label_title = Label(frame_right,
+                              image=right_title_img, bg="#FFFFFF")
+    right_label_title.place(x=130, y=0)
+    search_text = Label(
+        frame_right, text="Search :", font=right_frame_font, bg="#FFFFFF", fg="black")
+    search_text.place(x=350, y=57)
+    user_search_entry = Entry(frame_right, width=21,
+                              border=0, font=right_frame_font)
+    user_search_entry.place(x=400, y=60)
+    Frame(frame_right, width=150, height=2, bg="#64FEB5",).place(x=400, y=77)
 
+    # table
+    list_box_font = ("Helvetica", 20)
+    frame_list = Frame(frame_right, width=640, height=415, bg="black")
+    frame_list.place(x=6, y=97)
+    scroll_x = Scrollbar(frame_list, orient=HORIZONTAL)
+    scroll_y = Scrollbar(frame_list, orient=VERTICAL)
+    user_student_list = ttk.Treeview(frame_list)
+    user_student_list['columns'] = (
+        "userid", "name", "address", "gender", "mobile", "username")
+    # column
+    user_student_list.column("#0", width=0, stretch=NO)
+    user_student_list.column("userid", width=45, minwidth=45, anchor=CENTER)
+    user_student_list.column("name", width=120, minwidth=120, anchor=CENTER)
+    user_student_list.column("address", width=200, minwidth=200, anchor=W)
+    user_student_list.column("gender", width=50, minwidth=50, anchor=CENTER)
+    user_student_list.column("mobile", width=70, minwidth=70, anchor=W)
+    user_student_list.column("username", width=120,
+                             minwidth=120, anchor=CENTER)
 
-def hover_search_out(e):
-    image = PhotoImage(file="assets/search.png")
-    search_button.config(image=image)
-    search_button.image = image
+    # heading
+    user_student_list.heading("#0", text="")
+    user_student_list.heading("userid", text="UserID")
+    user_student_list.heading("name", text="Name")
+    user_student_list.heading("address", text="Address", anchor=W)
+    user_student_list.heading("gender", text="Gender")
+    user_student_list.heading("mobile", text="Mobile No.", anchor=W)
+    user_student_list.heading("username", text="Username", anchor=CENTER)
 
+    style = ttk.Style()
 
-def hover_update_in(e):
-    image = PhotoImage(file="assets/update_2.png")
-    update_button.config(image=image)
-    update_button.image = image
+    style.configure("Treeview",
+                    background="#c8ded8",
+                    foreground="black",
+                    rowheight=35,
+                    fieldbackground="#c8ded8"
+                    )
+    style.map("Treeview",
+              background=[('selected', '#0DEFBB')],
+              foreground=[('selected', 'black')]
+              )
 
+    scroll_x.pack(side=BOTTOM, fill=X)
+    scroll_y.pack(side=RIGHT, fill=Y)
+    scroll_x.config(command=user_student_list.xview)
+    scroll_y.config(command=user_student_list.yview)
+    user_student_list.pack()
+    user_student_list.bind("<ButtonRelease-1>", userrec)
 
-def hover_update_out(e):
-    image = PhotoImage(file="assets/update.png")
-    update_button.config(image=image)
-    update_button.image = image
+    # footer buttons frame
+    frame_buttons = Frame(root_user_manage, width=1260, height=95, bg="white")
+    frame_buttons.place(x=10, y=617)
 
+    # footer buttons
+    add_button_img = PhotoImage(file="assets/newuser.png")
+    add_user = Button(frame_buttons, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
+                      image=add_button_img, command=adduser)
+    add_user.place(x=30, y=20)
 
-def hover_exit_in(e):
-    image = PhotoImage(file="assets/exit_2.png")
-    exit_button.config(image=image)
-    exit_button.image = image
+    display_button_img = PhotoImage(file="assets/display.png")
+    display_user = Button(frame_buttons, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
+                          image=display_button_img, command=displayuser)
+    display_user.place(x=200, y=20)
 
+    clear_button_img = PhotoImage(file="assets/clear.png")
+    clear_user = Button(frame_buttons, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
+                        image=clear_button_img, command=userclear)
+    clear_user.place(x=370, y=20)
 
-def hover_exit_out(e):
-    image = PhotoImage(file="assets/exit.png")
-    exit_button.config(image=image)
-    exit_button.image = image
+    delete_button_img = PhotoImage(file="assets/delete.png")
+    delete_user = Button(frame_buttons, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
+                         image=delete_button_img, command=userdelete)
+    delete_user.place(x=540, y=20)
 
+    search_button_img = PhotoImage(file="assets/search.png")
+    search_user = Button(frame_buttons, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
+                         image=search_button_img, command=searchuser)
+    search_user.place(x=710, y=20)
+    update_button_img = PhotoImage(file="assets/update.png")
+    update_user = Button(frame_buttons, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
+                         image=update_button_img, command=updateuser)
+    update_user.place(x=880, y=20)
 
-def hover_home_in(e):
-    image = PhotoImage(file="assets/homebutton_2.png")
-    home_button.config(image=image)
-    home_button.image = image
+    exit_button_img = PhotoImage(file="assets/exit.png")
+    exit_user = Button(frame_buttons, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
+                       image=exit_button_img, command=userexit)
+    exit_user.place(x=1050, y=20)
 
-
-def hover_home_out(e):
-    image = PhotoImage(file="assets/homebutton.png")
-    home_button.config(image=image)
-    home_button.image = image
+    root_user_manage.mainloop()
 
 
 def studentpage():
@@ -866,30 +1155,11 @@ def studentpage():
                          image=exit_button_img, command=main_exit)
     exit_button.place(x=1050, y=20)
 
-    add_button.bind("<Enter>", hover_add_button_in)
-    add_button.bind("<Leave>", hover_add_button_out)
+    font1 = ("Helvetica", 11)
 
-    display_button.bind("<Enter>", hover_display_in)
-    display_button.bind("<Leave>", hover_display_out)
-
-    clear_button.bind("<Enter>", hover_clear_in)
-    clear_button.bind("<Leave>", hover_clear_out)
-
-    delete_button.bind("<Enter>", hover_delete_in)
-    delete_button.bind("<Leave>", hover_delete_out)
-
-    search_button.bind("<Enter>", hover_search_in)
-    search_button.bind("<Leave>", hover_search_out)
-
-    update_button.bind("<Enter>", hover_update_in)
-    update_button.bind("<Leave>", hover_update_out)
-
-    exit_button.bind("<Enter>", hover_exit_in)
-    exit_button.bind("<Leave>", hover_exit_out)
-
-    logout_button.bind("<Enter>", hover_main_page_logout_in)
-    logout_button.bind("<Leave>", hover_main_page_logout_out)
-
+    label_copyright = Label(
+        root_main_page, text=" ©Copyright @ SudhinJyothis ", font=font1, bg="white", fg="black")
+    label_copyright.place(x=10, y=690)
     root_main_page.mainloop()
 
 
@@ -912,13 +1182,18 @@ def intropage():
                          image=home_button_img, command=homebutton)
     home_button.place(x=575, y=380)
 
-    home_button.bind("<Enter>", hover_home_in)
-    home_button.bind("<Leave>", hover_home_out)
+    font1 = ("Helvetica", 15)
+
+    label_copyright = Label(
+        root_intro, text=" ©Copyright @ SudhinJyothis ", font=font1, bg="#C2FF9F", fg="black")
+    label_copyright.place(x=0, y=690)
+
     root_intro.mainloop()
 
 
 def portal():
     global portal_intro
+    global portal_exit_button, portal_button, user_button
     portal_intro = Tk()
     portal_intro.geometry("1280x720+300+100")
     portal_intro.title("School Admin Page")
@@ -939,11 +1214,20 @@ def portal():
                          image=user_button_img, command=user_portal)
     user_button.place(x=675, y=380)
 
+    exit_button_img = PhotoImage(file="assets/Allexit.png")
+    portal_exit_button = Button(portal_intro, bg="#00F6B7", border=0, activebackground="#00F6B7",
+                                image=exit_button_img, command=portalpagexit)
+    portal_exit_button.place(x=1100, y=10)
+
+    font1 = ("Helvetica", 15)
+    label_copyright = Label(
+        portal_intro, text=" ©Copyright @ SudhinJyothis ", font=font1, bg="#C2FF9F", fg="black")
+    label_copyright.place(x=0, y=690)
     portal_intro.mainloop()
 
 
 def adminportal():
-    global adminportal_intro
+    global adminportal_intro, admin_change_button, user_register_button
     adminportal_intro = Tk()
     adminportal_intro.geometry("1280x720+300+100")
     adminportal_intro.title("School Admin Page")
@@ -955,15 +1239,23 @@ def adminportal():
     label_background.place(x=0, y=0)
 
     portal_button_img = PhotoImage(file="assets/adminpassbutton_2.png")
-    portal_button = Button(adminportal_intro, bg="#9DFF8E", border=0, activebackground="#9DFF8E",
-                           image=portal_button_img, command=adminpasschange__)
-    portal_button.place(x=550, y=310)
+    admin_change_button = Button(adminportal_intro, bg="#9DFF8E", border=0, activebackground="#9DFF8E",
+                                 image=portal_button_img, command=adminpasschange__)
+    admin_change_button.place(x=550, y=310)
 
     user_button_img = PhotoImage(file="assets/register_adminbutton.png")
-    user_button = Button(adminportal_intro, bg="#9DFF8E", border=0, activebackground="#9DFF8E",
-                         image=user_button_img)
-    user_button.place(x=550, y=430)
+    user_register_button = Button(adminportal_intro, bg="#9DFF8E", border=0, activebackground="#9DFF8E",
+                                  image=user_button_img, command=register_user_button_func)
+    user_register_button.place(x=550, y=430)
+    exit_button_img = PhotoImage(file="assets/Allexit.png")
+    exit_button = Button(adminportal_intro, bg="#00F6B7", border=0, activebackground="#00F6B7",
+                         image=exit_button_img, command=adminportalexit)
+    exit_button.place(x=1100, y=10)
 
+    font1 = ("Helvetica", 15)
+    label_copyright = Label(
+        adminportal_intro, text=" ©Copyright @ SudhinJyothis ", font=font1, bg="#C2FF9F", fg="black")
+    label_copyright.place(x=0, y=690)
     adminportal_intro.mainloop()
 
 
@@ -989,6 +1281,11 @@ def userportal():
                          image=user_button_img, command=userdetails_)
     user_button.place(x=100, y=450)
 
+    exit_button_img = PhotoImage(file="assets/Allexit.png")
+    exit_button = Button(userportal_intro, bg="#00F6B7", border=0, activebackground="#00F6B7",
+                         image=exit_button_img, command=userportalexit)
+    exit_button.place(x=1100, y=10)
+
     font = ("Helvetica", 50)
     mydb_functions = mysql.connector.connect(
         host="localhost",
@@ -1008,7 +1305,10 @@ def userportal():
 
     total_label.place(x=450, y=350)
     total2_label.place(x=450, y=430)
-
+    font1 = ("Helvetica", 15)
+    label_copyright = Label(
+        userportal_intro, text=" ©Copyright @ SudhinJyothis ", font=font1, bg="#C2FF9F", fg="black")
+    label_copyright.place(x=0, y=690)
     userportal_intro.mainloop()
 
 
@@ -1025,18 +1325,37 @@ def userdetails():
         Image.open("assets\\userdetailsback.png"))
     label_background = Label(image=background_img)
     label_background.pack()
-    label_name = Label(user_details, text="Name         : ",
-                       font=font, bg="#C1FF9A", fg="#3d403f").place(x=100, y=250)
-    label_age = Label(user_details, text="Age            : ",
+
+    mydb_functions = mysql.connector.connect(
+        host="localhost",
+        user="root",
+        passwd=os.environ.get("sql_pass"),
+        database="schoolmanagement"
+    )
+    cursorobj = mydb_functions.cursor()
+    cursorobj.execute("SELECT * from userdata where log='loggedin'")
+    fetch = cursorobj.fetchall()
+    write = fetch[0]
+    useridwrite = write[0]
+    usernamewrite = write[1]
+    usermobile = write[4]
+    userusernamewrite = write[5]
+    label_name = Label(user_details, text="UserID        : "+"     "+str(useridwrite),
+                       font=font, bg="#B3FF92", fg="#3d403f").place(x=100, y=250)
+    label_age = Label(user_details, text="Name         : "+"     "+str(usernamewrite),
                       font=font, bg="#C1FF9A", fg="#3d403f").place(x=100, y=325)
-    label_username = Label(user_details, text="Mobile        : ",
-                           font=font, bg="#C1FF9A", fg="#3d403f").place(x=100, y=400)
-    label_username = Label(user_details, text="Username  : ",
+    label_username = Label(user_details, text="Mobile        : ""     "+str(usermobile),
+                           font=font, bg="#B3FF92", fg="#3d403f").place(x=100, y=400)
+    label_username = Label(user_details, text="Username  : ""     "+str(userusernamewrite),
                            font=font, bg="#C1FF9A", fg="#3d403f").place(x=100, y=475)
-    user_back_img = PhotoImage(file="assets/userdetailsbackbutton.png")
-    user_back_button = Button(user_details, bg="#9DFF8E", border=0, activebackground="#9DFF8E",
+    user_back_img = PhotoImage(file="assets/userportexit_2.png")
+    user_back_button = Button(user_details, bg="#00F6B7", border=0, activebackground="#00F6B7",
                               image=user_back_img, command=userdetails_back2)
-    user_back_button.place(x=550, y=600)
+    user_back_button.place(x=1100, y=10)
+    font1 = ("Helvetica", 15)
+    label_copyright = Label(
+        user_details, text=" ©Copyright @ SudhinJyothis ", font=font1, bg="#C2FF9F", fg="black")
+    label_copyright.place(x=0, y=690)
     mainloop()
 
 
@@ -1092,7 +1411,14 @@ def changeadminpass():
     change_button = Button(frame_change, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
                            image=add_button_img, command=adminchangeinfo)
     change_button.place(x=300, y=350)
-
+    exit_button_img = PhotoImage(file="assets/adminportexit.png")
+    exit_button = Button(admin_password_change, bg="#00F6B7", border=0, activebackground="#00F6B7",
+                         image=exit_button_img, command=adminpasschangeexit)
+    exit_button.place(x=1100, y=10)
+    font1 = ("Helvetica", 15)
+    label_copyright = Label(
+        admin_password_change, text=" ©Copyright @ SudhinJyothis ", font=font1, bg="#C2FF9F", fg="black")
+    label_copyright.place(x=0, y=690)
     mainloop()
 
 
@@ -1107,6 +1433,10 @@ def registeruser():
         Image.open("assets\\userregisterback.png"))
     label_background = Label(image=background_img)
     label_background.place(x=0, y=0)
+    font1 = ("Helvetica", 25)
+    label_copyright = Label(
+        register_user, text=" ©Copyright @ SudhinJyothis ", font=font1, bg="#C2FF9F", fg="black")
+    label_copyright.place(x=0, y=690)
 
 
 def login_admin_page():
@@ -1130,9 +1460,9 @@ def login_admin_page():
     frame1 = Frame(login_root, width=30, height=40, bg="white")
 
     # Login
-    login_img = ImageTk.PhotoImage(Image.open("assets\\Login.png"))
+    login_img = ImageTk.PhotoImage(Image.open("assets\\Login_admin.png"))
     label_login = Label(image=login_img, border=0, bg="#FFFFFF")
-    label_login.place(x=510, y=120)
+    label_login.place(x=525, y=120)
 
     # username
     label_username_text = Label(login_root, text="Username ", bg="#FFFFFF")
@@ -1167,26 +1497,17 @@ def login_admin_page():
     login_button = Button(login_root, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
                           image=login_button_img, command=adminlogin)
     login_button.place(x=570, y=400)
-
-    register_button_img = PhotoImage(file="assets/register_button.png")
-    register_button_log = Button(login_root, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
-                                 image=register_button_img, command=login_to_register)
-    #register_button_log.place(x=570, y=470)
+    login_button.bind("<Return>", adminenterlogin)
 
     exit_button_img = PhotoImage(file="assets/loginexit.png")
     login_exit_button = Button(login_frame, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
                                image=exit_button_img, command=adminloginexit)
     login_exit_button.place(x=725, y=95)
 
-    login_button.bind("<Enter>", hover_login_in)
-    login_button.bind("<Leave>", hover_login_out)
-
-    register_button_log.bind("<Enter>", hover_register_log_in)
-    register_button_log.bind("<Leave>", hover_register_log_out)
-
-    login_exit_button.bind("<Enter>", hover_login_page_exit_in)
-    login_exit_button.bind("<Leave>", hover_login_page_exit_out)
-
+    font1 = ("Helvetica", 15)
+    label_copyright = Label(
+        login_root, text=" ©Copyright @ SudhinJyothis ", font=font1, bg="#C2FF9F", fg="black")
+    label_copyright.place(x=0, y=690)
     login_root.mainloop()
 
 
@@ -1211,9 +1532,9 @@ def login_user_page():
     frame1 = Frame(login_user_root, width=30, height=40, bg="white")
 
     # Login
-    login_img = ImageTk.PhotoImage(Image.open("assets\\Login.png"))
+    login_img = ImageTk.PhotoImage(Image.open("assets\\Login_user.png"))
     label_login = Label(image=login_img, border=0, bg="#FFFFFF")
-    label_login.place(x=510, y=120)
+    label_login.place(x=525, y=120)
 
     # username
     label_username_text = Label(
@@ -1252,26 +1573,17 @@ def login_user_page():
     login_button = Button(login_user_root, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
                           image=login_button_img, command=login)
     login_button.place(x=570, y=400)
-
-    register_button_img = PhotoImage(file="assets/register_button.png")
-    register_button_log = Button(login_user_root, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
-                                 image=register_button_img, command=login_to_register)
-    #register_button_log.place(x=570, y=470)
+    login_button.bind("<Return>", enterlogin)
 
     exit_button_img = PhotoImage(file="assets/loginexit.png")
     login_exit_button = Button(login_frame, bg="#FFFFFF", border=0, activebackground="#FFFFFF",
                                image=exit_button_img, command=login_exit)
     login_exit_button.place(x=725, y=95)
 
-    login_button.bind("<Enter>", hover_login_in)
-    login_button.bind("<Leave>", hover_login_out)
-
-    register_button_log.bind("<Enter>", hover_register_log_in)
-    register_button_log.bind("<Leave>", hover_register_log_out)
-
-    login_exit_button.bind("<Enter>", hover_login_page_exit_in)
-    login_exit_button.bind("<Leave>", hover_login_page_exit_out)
-
+    font1 = ("Helvetica", 15)
+    label_copyright = Label(
+        login_user_root, text=" ©Copyright @ SudhinJyothis ", font=font1, bg="#C2FF9F", fg="black")
+    label_copyright.place(x=0, y=690)
     login_user_root.mainloop()
 
 
@@ -1284,15 +1596,9 @@ database = mysql.connector.connect(
 cursorobject = database.cursor()
 cursorobject.execute("CREATE database if not exists schoolmanagement")
 cursorobject.execute("USE schoolmanagement")
-# cursorobject.execute(
-# "CREATE table if not exists login(username varchar(100),password varchar(100),mobile varchar(20),age int(10),name varchar(100),log varchar(10))")
-# cursorobject.execute(
-# "CREATE table if not exists studentdata(admno int(10),studentname varchar(100),class varchar(20),addresss varchar(200),gender varchar(10),mobile varchar(20),fees varchar(5000))")
-cursorobject.execute("SELECT * from login")
-fetch = cursorobject.fetchall()
-# for check in fetch:
-# if check[2] == "loggedin":
-# userportal()
-# else:
+cursorobject.execute(
+    "CREATE table if not exists userdata(userid int(10),name varchar(100),address varchar(200),gender varchar(10),mobile varchar(20),username varchar(100),password varchar(100),log varchar(20))")
+cursorobject.execute(
+    "CREATE table if not exists studentdata(admno int(10),studentname varchar(100),class varchar(20),addresss varchar(300),gender varchar(10),mobile varchar(20),fees varchar(100))")
 intropage()
 database.close()
